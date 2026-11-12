@@ -8961,6 +8961,7 @@
       window.__LuaToolsRestartInserted = false;
       window.__LuaToolsIconInserted = false;
       window.__LuaToolsHeaderInserted = false;
+      window.__LuaToolsHeaderRetries = 0;
       window.__LuaToolsManageInserted = false;
       window.__LuaToolsPresenceCheckInFlight = false;
       window.__LuaToolsPresenceCheckAppId = undefined;
@@ -8971,7 +8972,26 @@
     }
 
     // Store Header Button Logic (always visible)
-    const headerContainer = document.querySelector("._1wn1lBlAzl3HMRqS1llwie");
+    // Steam regenerates its obfuscated header classes on client updates, so
+    // the legacy class is only tried first. The stable anchor is the labelled
+    // store navigation bar; inside it, the wishlist link's parent is the icon
+    // group the button belongs to.
+    const storeNavigation = document.querySelector(
+      'div[role="navigation"][aria-label]',
+    );
+    const wishlistLink =
+      storeNavigation && storeNavigation.querySelector('a[href*="/wishlist"]');
+    const headerContainer =
+      document.querySelector("._1wn1lBlAzl3HMRqS1llwie") ||
+      (wishlistLink && wishlistLink.parentElement) ||
+      storeNavigation;
+    // The header can render after the first pass: retry a bounded number of
+    // times until it exists.
+    if (!headerContainer && (window.__LuaToolsHeaderRetries || 0) < 15) {
+      window.__LuaToolsHeaderRetries =
+        (window.__LuaToolsHeaderRetries || 0) + 1;
+      setTimeout(addLuaToolsButton, 1000);
+    }
     if (
       headerContainer &&
       !document.querySelector(".luatools-header-button")
@@ -10838,6 +10858,7 @@
       window.__LuaToolsRestartInserted = false;
       window.__LuaToolsIconInserted = false;
       window.__LuaToolsHeaderInserted = false;
+      window.__LuaToolsHeaderRetries = 0;
       window.__LuaToolsManageInserted = false;
 
       window.__LuaToolsPresenceCheckInFlight = false;

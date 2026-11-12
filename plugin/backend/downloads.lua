@@ -285,6 +285,14 @@ function downloads._finalize_install_lua(appid, collection_dir, _, api_name)
         .. " sources=" .. contributors
         .. " manifests=" .. tostring(result.manifest_count or 0)
         .. " -> installed " .. tostring(result.installed_path))
+    -- The grafted client imports a new script only on a config reload.
+    local called, requested, request_error = pcall(provision.request_reimport)
+    if called and requested then
+        logger.log("LuaTools: client import requested appid=" .. tostring(appid))
+    else
+        logger.warn("LuaTools: client import appid=" .. tostring(appid) .. " not requested: "
+            .. tostring(called and request_error or requested))
+    end
     _set_download_state(appid, {
         status = "done", success = true, api = contributors,
         installedPath = result.installed_path,

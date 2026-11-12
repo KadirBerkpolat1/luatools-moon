@@ -80,7 +80,11 @@ preload("lua_tools_manifest", {})
 -- Nothing seeds it beforehand, so the coverage checks below only pass when
 -- that render precedes the handoff.
 local render_appinfo
-preload("provision", { ensure_picsbuffer = function(appid) return render_appinfo(appid) end })
+local reimport_requests = 0
+preload("provision", {
+  ensure_picsbuffer = function(appid) return render_appinfo(appid) end,
+  request_reimport = function() reimport_requests = reimport_requests + 1; return true end,
+})
 preload("source_limits", dofile("plugin/backend/source_limits.lua"))
 preload("json", { -- decode the fields downloads.lua reads from the state file
   decode = function(s)
@@ -254,9 +258,12 @@ end
 -- transition to the unified smart collector.
 prepare_source()
 os.execute("printf '%s' '{\"status\":\"extracted\",\"currentApi\":\"Manual\"}' > " .. SF)
+local requests_before_finish = reimport_requests
 local manual_done = downloads.get_add_status(APPID)
 check(manual_done and manual_done.state and manual_done.state.status == "done",
   "(E0) manual extracted -> validated finalize -> done")
+check(requests_before_finish == 0 and reimport_requests == 1,
+  "(E0a) only a finished add asks the client to import the game, once")
 
 -- (E1) collected -> merge/finalize -> done
 prepare_source()

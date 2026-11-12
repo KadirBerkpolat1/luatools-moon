@@ -144,4 +144,22 @@ function provision.ensure_picsbuffer(appid, opts)
     return true, "written"
 end
 
+-- The grafted client imports <Steam>/config/stplug-in only at startup and on a
+-- config reload; unlike slsteam-moon it does not watch that directory. Its
+-- config watcher reloads on IN_CLOSE_WRITE, which closing config.yaml after a
+-- write-mode open raises without changing a byte. A finished add calls this so
+-- the game reaches the library without restarting Steam.
+-- request_reimport(opts) -> true | nil, error. opts (tests): home, open.
+function provision.request_reimport(opts)
+    opts = opts or {}
+    local home = opts.home or m_utils.getenv("HOME") or os.getenv("HOME") or ""
+    if home == "" then return nil, "no HOME" end
+    -- "r+b" never creates the file: with no config the client has not run yet
+    -- and imports every script on its first start.
+    local file = (opts.open or io.open)(home .. "/.config/SLSsteam/config.yaml", "r+b")
+    if not file then return nil, "config.yaml not found" end
+    file:close()
+    return true
+end
+
 return provision

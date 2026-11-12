@@ -76,6 +76,11 @@ preload("api_manifest", {
 preload("settings.manager", { get_hubcap_api_key = function() return "" end })
 preload("smart_merge", dofile("plugin/backend/smart_merge.lua"))
 preload("lua_tools_manifest", {})
+-- The add flow renders the appinfo buffer itself before the coverage handoff.
+-- Nothing seeds it beforehand, so the coverage checks below only pass when
+-- that render precedes the handoff.
+local render_appinfo
+preload("provision", { ensure_picsbuffer = function(appid) return render_appinfo(appid) end })
 preload("source_limits", dofile("plugin/backend/source_limits.lua"))
 preload("json", { -- decode the fields downloads.lua reads from the state file
   decode = function(s)
@@ -91,8 +96,8 @@ local APPID = 367520
 local SF = TMP .. "/" .. APPID .. "_state.json"
 
 os.execute("mkdir -p '" .. TMP .. "/home/.config/SLSsteam/cache'")
-do
-  local f = assert(io.open(TMP .. "/home/.config/SLSsteam/cache/picsbuffer_" .. APPID .. ".bin", "w"))
+render_appinfo = function(appid)
+  local f = assert(io.open(TMP .. "/home/.config/SLSsteam/cache/picsbuffer_" .. appid .. ".bin", "w"))
   f:write('"appinfo" { "depots" {'
     .. ' "367521" { "config" { "oslist" "windows" }'
     .. ' "manifests" { "public" { "gid" "9001" } } }'
@@ -103,6 +108,7 @@ do
     .. ' "400001" { "dlcappid" "400001" }'
     .. '} "extended" { "listofdlc" "400000,400001,4093670" } }')
   f:close()
+  return true, "written"
 end
 
 local fails = 0
@@ -240,6 +246,8 @@ local function prepare_source()
   f:write("addappid(" .. APPID .. ")\naddappid(" .. (APPID + 1)
     .. ",1,\"" .. string.rep("a", 64) .. "\")\n")
   f:close()
+  f = io.open(source_dir .. "/" .. (APPID + 1) .. "_9001.manifest", "wb")
+  f:write(valid_manifest(APPID + 1, 9001, 1700000000)); f:close()
 end
 
 -- (E0) Keep accepting the legacy "extracted" handoff while installed clients

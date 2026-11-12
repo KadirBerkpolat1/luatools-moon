@@ -12,6 +12,7 @@ local cjson = require("json")
 local smart_merge = require("smart_merge")
 local lua_tools_manifest = require("lua_tools_manifest")
 local source_limits = require("source_limits")
+local provision = require("provision")
 
 local downloads = {}
 local DOWNLOAD_STATE = {}
@@ -250,6 +251,9 @@ function downloads._finalize_install_lua(appid, collection_dir, _, api_name)
         if err == "no_usable_base_key" then
             error_code = "missing_base_key"
             message = "The sources responded, but none contained a usable key for the base game. Optional DLC data was kept from blocking the result."
+        elseif err == "no_manifests" then
+            error_code = "no_manifests"
+            message = "No source has depot manifests for this game yet, so it cannot be downloaded. The game was not added; try again later."
         elseif err == "wrong_app" then
             error_code = "wrong_app"
             message = "The downloaded packages were for a different app."
@@ -528,6 +532,21 @@ local function _has_fresh_job(appid)
     return false
 end
 
+-- The grafted .so consumes picsbuffer but never renders it. Render it before
+-- the coverage handoff: the collector and the merge then see the app's public
+-- depots and gids on the first add, and the finished add has an installable
+-- plan without manual feeding. A failed render never blocks the add.
+local function _ensure_picsbuffer(appid)
+    local called, rendered, detail = pcall(provision.ensure_picsbuffer, appid)
+    if not called then
+        logger.warn("LuaTools: picsbuffer appid=" .. tostring(appid) .. " crashed: " .. tostring(rendered))
+    elseif rendered then
+        logger.log("LuaTools: picsbuffer appid=" .. tostring(appid) .. " " .. tostring(detail))
+    else
+        logger.warn("LuaTools: picsbuffer appid=" .. tostring(appid) .. " skipped: " .. tostring(detail))
+    end
+end
+
 local function _write_coverage(appid, coverage_file)
     local home = m_utils.getenv("HOME") or os.getenv("HOME") or ""
     local appinfo_path = fs.join(home, ".config", "SLSsteam", "cache",
@@ -604,6 +623,7 @@ _start_smart_records = function(appid, records, current_api)
             error("Could not prepare source list")
         end
         os.execute("chmod 600 -- " .. _shell_quote(job.candidates))
+        _ensure_picsbuffer(appid)
         if not _write_coverage(appid, job.coverage) then error("Could not prepare depot coverage") end
         os.execute("chmod 600 -- " .. _shell_quote(job.coverage))
         if not _atomic_write(job.state, '{"status":"downloading"}\n') then

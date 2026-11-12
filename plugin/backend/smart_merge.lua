@@ -1002,6 +1002,10 @@ end
 function smart_merge.commit(appid, collection_dir, edits, supplied_opts)
     local preview, err = smart_merge.preview(appid, collection_dir, supplied_opts)
     if not preview then return nil, err end
+    -- 64-bit Steam grants no manifest request code for unowned apps, so an
+    -- add without depot manifests can never download (0 B install). Refuse
+    -- it before anything is staged instead of leaving a dead library entry.
+    if (preview.manifest_count or 0) == 0 then return nil, "no_manifests" end
     local lua_text, lua_error = smart_merge.build_edited_lua(appid, edits, preview)
     if not lua_text then return nil, lua_error end
     return publish_preview(appid, preview, lua_text, supplied_opts)

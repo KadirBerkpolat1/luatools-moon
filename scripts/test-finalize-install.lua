@@ -143,10 +143,10 @@ local no_manifest_files,no_manifest_opts=harness({
   [root.."/source_0000/.source-priority"]="0",
   [root.."/source_0000/"..APP..".lua"]='addappid('..APP..')\naddappid(11,1,"'..K1..'")\n',
 })
-local lua_only_result=merge.install(APP,root,no_manifest_opts)
-check("valid lua without manifests is accepted",lua_only_result~=nil and
-  (no_manifest_files["/steam/config/stplug-in/"..APP..".lua"] or ""):find(K1,1,true)~=nil and
-  lua_only_result.manifest_count==0)
+local lua_only_result,lua_only_error=merge.install(APP,root,no_manifest_opts)
+check("valid lua without manifests is refused before anything is staged",
+  lua_only_result==nil and lua_only_error=="no_manifests" and
+  no_manifest_files["/steam/config/stplug-in/"..APP..".lua"]==nil)
 
 local partial_files,partial_opts=harness({
   [root.."/source_0000/.source-name"]="Partial",

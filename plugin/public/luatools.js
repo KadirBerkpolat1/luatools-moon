@@ -8972,21 +8972,23 @@
     }
 
     // Store Header Button Logic (always visible)
-    // Steam regenerates its obfuscated header classes on client updates, so
-    // the legacy class is only tried first. The stable anchor is the labelled
-    // store navigation bar; inside it, the wishlist link's parent is the icon
-    // group the button belongs to.
+    // Steam regenerates its obfuscated header classes on client updates; anchor on
+    // the Wishlist + Cart icon group or labelled store navigation bar, and retry
+    // while the header is still mounting.
     const storeNavigation = document.querySelector(
       'div[role="navigation"][aria-label]',
     );
-    const wishlistLink =
+    const navWishlist =
       storeNavigation && storeNavigation.querySelector('a[href*="/wishlist"]');
+    const cartRow = Array.from(
+      document.querySelectorAll('a[href*="/cart/"]'),
+      (cart) => cart.parentElement,
+    ).find((row) => row && row.querySelector('a[href*="/wishlist/"]'));
     const headerContainer =
       document.querySelector("._1wn1lBlAzl3HMRqS1llwie") ||
-      (wishlistLink && wishlistLink.parentElement) ||
+      cartRow ||
+      (navWishlist && navWishlist.parentElement) ||
       storeNavigation;
-    // The header can render after the first pass: retry a bounded number of
-    // times until it exists.
     if (!headerContainer && (window.__LuaToolsHeaderRetries || 0) < 15) {
       window.__LuaToolsHeaderRetries =
         (window.__LuaToolsHeaderRetries || 0) + 1;

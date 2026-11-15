@@ -2,16 +2,14 @@
 
 ## Install
 
-Set up slsteam-moon, Lumen and the LuaTools plugin automatically with a single command:
+Do not run this fork's `install.sh`: it is the upstream 32-bit installer and
+stops with an error here. This fork is the LuaTools plugin tree that
+[moon64](https://github.com/KadirBerkpolat1/moon64) installs on Steam's 64-bit
+client. Install with:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/swwayps/luatools-moon/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/KadirBerkpolat1/moon64/main/get.sh | bash
 ```
-
-> **Requirements:** Linux x86_64 and **native Steam** installed from your package
-> manager. Flatpak and Snap Steam are not supported.
->
-> **Want Steam theme support?** Use the [`millennium` branch](https://github.com/swwayps/luatools-moon/tree/millennium).
 
 ---
 

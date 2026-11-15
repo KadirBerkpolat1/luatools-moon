@@ -3141,8 +3141,18 @@ main() {
 	fi
 }
 
-# Run the installer unless sourced for unit tests (SLSPLUGIN_LIB_ONLY=1).
-# Plain `curl ... | bash` leaves SLSPLUGIN_LIB_ONLY unset, so main still runs.
+# This fork is not installed on its own: moon64 overlays its plugin/ tree onto
+# the 64-bit Steam client. Running this 32-bit upstream installer would replace
+# the moon64 stack, so a direct run stops before touching anything.
 if [ -z "${SLSPLUGIN_LIB_ONLY:-}" ]; then
-	main "$@"
+	cat >&2 <<'EOF'
+This luatools-moon fork has no installer of its own; do not run this script.
+It would install the 32-bit slsteam-moon stack over moon64. Install with:
+
+  curl -fsSL https://raw.githubusercontent.com/KadirBerkpolat1/moon64/main/get.sh | bash
+
+Bu fork'un kendi installer'ı yok; bu script'i çalıştırma. moon64'ün üzerine
+32-bit slsteam-moon kurar. Kurulum için yukarıdaki moon64 komutunu kullan.
+EOF
+	exit 1
 fi

@@ -1272,8 +1272,8 @@ restore_steam_sh() {
 	# 2) The system-wide bootstrap tarball shipped by the steam package.
 	local sys_boot
 	for sys_boot in \
-		/usr/lib/steam/bootstraplinux_ubuntu12_32.tar.xz \
-		/usr/share/steam/bootstraplinux_ubuntu12_32.tar.xz; do
+		/usr/lib/steam/bootstraplinux_*.tar.xz \
+		/usr/share/steam/bootstraplinux_*.tar.xz; do
 		if [ -f "$sys_boot" ] && tar xJf "$sys_boot" -C "$data_dir" steam.sh 2>/dev/null; then
 			chmod +x "$data_dir/steam.sh" 2>/dev/null || true
 			log_success "$(L "Restored steam.sh from the system bootstrap" \
@@ -2464,6 +2464,36 @@ CR_FLATPAK_INSTALLED=0
 CR_SO_STAMP="$CR_DIR/.cloud_redirect.etag"
 CR_CLI_STAMP="$CR_DIR/.cloud_redirect_cli.etag"
 
+elf_header5() {
+	od -An -tx1 -N5 "$1" 2>/dev/null | tr -d ' \n'
+}
+
+steam_client_is_64bit() {
+	local cand
+	for cand in "$HOME/.steam/steam/steamrt64/steam" \
+	            "$HOME/.local/share/Steam/steamrt64/steam" \
+	            "$HOME/.steam/debian-installation/steamrt64/steam"; do
+		[ -f "$cand" ] || continue
+		[ "$(elf_header5 "$cand")" = "7f454c4602" ] && return 0
+	done
+	return 1
+}
+
+cloudredirect_usable() {
+	[ -f "$CR_SO_PATH" ] || return 1
+	if steam_client_is_64bit && [ "$(elf_header5 "$CR_SO_PATH")" = "7f454c4601" ]; then
+		return 1
+	fi
+	return 0
+}
+
+sls_config_yaml_path() {
+	case "${XDG_CONFIG_HOME:-}" in
+		/*) printf '%s/SLSsteam/config.yaml\n' "$XDG_CONFIG_HOME" ;;
+		*)  printf '%s/.config/SLSsteam/config.yaml\n' "$HOME" ;;
+	esac
+}
+
 # True when the CloudRedirect hook is already deployed on this machine.
 cloudredirect_installed() {
 	[ -s "$CR_SO_PATH" ]
@@ -2472,7 +2502,7 @@ cloudredirect_installed() {
 # ETag of the published hook, or empty when it can't be determined (offline,
 # proxy that strips the header, ...). HEAD only — no payload is transferred.
 cr_published_stamp() {
-	local url="$1"
+	local url="${1:-$CR_SO_URL}"
 	curl -fsSLI "$url" 2>/dev/null |
 		tr -d '\r' |
 		awk 'tolower($1) == "etag:" { sub(/^[^:]*:[[:space:]]*/, ""); stamp = $0 } END { print stamp }'
@@ -2520,19 +2550,23 @@ install_cloudredirect_so() {
 		return 1
 	fi
 
-	# The Steam client is 32-bit, so the hook must be a 32-bit ELF or it will be
-	# silently ignored by the loader. Verify before deploying. ELF32 magic:
-	# bytes 0-3 = 7f 45 4c 46, byte 4 (EI_CLASS) = 01. Checked via `od`
-	# (coreutils, always present) instead of `file`, which isn't installed by
-	# default on every distro (NixOS notably ships no `file` by default).
-	if [ "$(od -An -tx1 -N5 "$so" 2>/dev/null | tr -d ' \n')" != "7f454c4601" ]; then
-		log_warn "$(L "Downloaded cloud_redirect.so is not 32-bit; skipping cloud saves." \
-		             "cloud_redirect.so baixado não é 32-bit; pulando cloud saves.")"
+	# Match the hook's ELF class to the installed Steam client (7f454c4601 = 32-bit,
+	# 7f454c4602 = 64-bit). Checked via `od` (coreutils) instead of `file`.
+	local want_elf="7f454c4601"
+	steam_client_is_64bit && want_elf="7f454c4602"
+	if [ "$(elf_header5 "$so")" != "$want_elf" ]; then
+		if [ "$want_elf" = "7f454c4602" ]; then
+			log_warn "$(L "CloudRedirect is not yet available for the 64-bit Steam client; skipping cloud saves." \
+			             "CloudRedirect ainda não está disponível para o cliente Steam 64-bit; pulando cloud saves.")"
+		else
+			log_warn "$(L "Downloaded cloud_redirect.so does not match the Steam client architecture; skipping cloud saves." \
+			             "cloud_redirect.so baixado não corresponde à arquitetura da Steam; pulando cloud saves.")"
+		fi
 		return 1
 	fi
-	if [ "$(od -An -tx1 -N5 "$cli" 2>/dev/null | tr -d ' \n')" != "7f454c4601" ]; then
-		log_warn "$(L "Downloaded cloud_redirect_cli is not 32-bit; skipping cloud saves." \
-		             "cloud_redirect_cli baixado não é 32-bit; pulando cloud saves.")"
+	if [ "$(elf_header5 "$cli")" != "7f454c4601" ] && [ "$(elf_header5 "$cli")" != "7f454c4602" ]; then
+		log_warn "$(L "Downloaded cloud_redirect_cli is not a valid ELF binary; skipping cloud saves." \
+		             "cloud_redirect_cli baixado não é um binário ELF válido; pulando cloud saves.")"
 		return 1
 	fi
 
@@ -2606,7 +2640,7 @@ cr_write_so_stamp() {
 # moon's per-key defaults fill in the rest on load.
 set_disable_cloud() {
 	local want="$1"                                # "yes" or "no"
-	local cfg="$HOME/.config/SLSsteam/config.yaml"
+	local cfg; cfg="$(sls_config_yaml_path)"
 
 	# The config is seeded from slsteam-moon's full template at install time
 	# (seed_slsteam_config); if it somehow isn't there yet, do nothing rather
@@ -2642,7 +2676,7 @@ set_disable_cloud() {
 # every load. Never clobbers an existing config.
 seed_slsteam_config() {
 	local src="$1"
-	local cfg="$HOME/.config/SLSsteam/config.yaml"
+	local cfg; cfg="$(sls_config_yaml_path)"
 
 	[ -f "$cfg" ] && return 0
 	[ -f "$src" ] || return 0
@@ -2658,7 +2692,7 @@ seed_slsteam_config() {
 # LD_PRELOAD cloud_redirect.so. Called on the cloud-save opt-out / hook-missing
 # paths so the config reflects what will actually load.
 sync_cloud_config_with_hook() {
-	if [ -f "$CR_SO_PATH" ]; then
+	if cloudredirect_usable; then
 		set_disable_cloud no
 	else
 		set_disable_cloud yes
@@ -2920,7 +2954,7 @@ print_complete() {
 	if [ "$OPT_NOPLUGIN" != 1 ]; then
 		echo -e "    ${GREEN}•${NC} LuaTools ($(L "plugin" "plugin"))"
 	fi
-	if [ -f "$CR_SO_PATH" ]; then
+	if cloudredirect_usable; then
 		echo -e "    ${GREEN}•${NC} CloudRedirect ($(L "cloud saves" "cloud saves"))"
 	fi
 	local coverage_policy
@@ -2931,7 +2965,7 @@ print_complete() {
 
 	# Cloud-save guidance: the .so is installed; the user picks a provider and
 	# signs in from Lumen Settings → Cloud Saves (no separate login app).
-	if [ -f "$CR_SO_PATH" ]; then
+	if cloudredirect_usable; then
 		echo -e "  ${MOON}$(L "Cloud saves:" "Cloud saves:")${NC}"
 		echo -e "    $(L "Open Steam → Lumen Settings → Cloud Saves to pick a provider" \
 		               "Abra a Steam → Configurações do Lumen → Saves na Nuvem para escolher um provedor")"

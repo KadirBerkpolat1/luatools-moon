@@ -326,14 +326,14 @@ end
 -- archived manifests would otherwise linger forever, so drop them here.
 -- Returns true,count | false,error.
 function slsteam.purge_store_for_lua(lua_path)
-  local home = os.getenv("HOME") or ""
-  if home == "" then return false, "HOME not set" end
+  local root = config_root()
+  if not root then return false, "HOME not set" end
   local f = io.open(lua_path, "rb")
   if not f then return true, 0 end
   local data = f:read("*a") or ""
   f:close()
 
-  local store = home .. "/.config/SLSsteam/manifests"
+  local store = root .. "/SLSsteam/manifests"
   local seen, count = {}, 0
   for id in data:gmatch("addappid%s*%(%s*(%d+)") do
     if not seen[id] then

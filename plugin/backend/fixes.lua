@@ -22,8 +22,8 @@ end
 local shell_quote = guard.shell_quote
 
 -- Mirrors a fix archive may come from when the FRONTEND supplies the URL. Every
--- such URL was produced by one of this backend's own RPCs (check_for_fixes ->
--- files.luatools.work, onlinefix.resolve -> the online-fix mirror), so that set is
+-- such URL was produced by one of this backend's own RPCs (onlinefix.resolve ->
+-- the online-fix mirror), so that set is
 -- closed. Without it the endpoint
 -- accepted any URL and wrote its contents into a directory the caller also chose
 -- — a file write to anywhere the user can write.
@@ -34,52 +34,8 @@ local shell_quote = guard.shell_quote
 -- provenance vouches for it (see validate_apply_target).
 fixes.ALLOWED_FIX_HOSTS = {
     ["files.luatools.work"] = true,
-    ["index.luatools.work"] = true,
     ["api.perondepot.xyz"] = true,
 }
-
-function fixes.check_for_fixes(appid)
-    if type(appid) == "string" then appid = tonumber(appid) end
-    local result = {
-        success = true,
-        appid = appid,
-        gameName = "Unknown Game (" .. tostring(appid) .. ")",
-        genericFix = { status = 0, available = false },
-        onlineFix = { status = 0, available = false }
-    }
-
-    local FIXES_INDEX_URL = "https://index.luatools.work/fixes-index.json"
-    local resp = http_client.get(FIXES_INDEX_URL, { timeout = 10 })
-    if resp and resp.status == 200 and resp.body then
-        local data = utils.decode_json(resp.body)
-        if type(data) == "table" then
-            local generic_url = "https://files.luatools.work/GameBypasses/" .. tostring(appid) .. ".zip"
-            local online_url = "https://files.luatools.work/OnlineFix1/" .. tostring(appid) .. ".zip"
-
-            local has_generic = false
-            for _, v in ipairs(data.genericFixes or {}) do if tonumber(v) == appid then has_generic = true break end end
-            if has_generic then
-                result.genericFix.status = 200
-                result.genericFix.available = true
-                result.genericFix.url = generic_url
-            else
-                result.genericFix.status = 404
-            end
-
-            local has_online = false
-            for _, v in ipairs(data.onlineFixes or {}) do if tonumber(v) == appid then has_online = true break end end
-            if has_online then
-                result.onlineFix.status = 200
-                result.onlineFix.available = true
-                result.onlineFix.url = online_url
-            else
-                result.onlineFix.status = 404
-            end
-        end
-    end
-
-    return result
-end
 
 -- validate_apply_target(appid, download_url, install_path, deps)
 --   -> url, path   or   nil, error table

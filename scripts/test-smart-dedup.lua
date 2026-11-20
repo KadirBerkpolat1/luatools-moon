@@ -77,6 +77,7 @@ preload("settings.manager", { get_hubcap_api_key = function() return "" end })
 preload("smart_merge", dofile("plugin/backend/smart_merge.lua"))
 preload("lua_tools_manifest", {})
 preload("source_limits", dofile("plugin/backend/source_limits.lua"))
+preload("sls_profile", dofile("plugin/backend/sls_profile.lua"))
 preload("json", { -- decode the fields downloads.lua reads from the state file
   decode = function(s)
     local status = s:match('"status"%s*:%s*"([^"]*)"')

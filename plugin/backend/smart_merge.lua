@@ -522,11 +522,23 @@ end
 
 local JOURNAL_HEADER = "LUATOOLS-PUBLISH-1"
 
+-- opts.sls_root is the resolved SLSsteam directory; opts.home pins the plain
+-- $HOME/.config layout so callers stay independent of the live environment.
+local function sls_root(opts)
+    if opts.sls_root then return opts.sls_root end
+    if opts.home then
+        if opts.home == "" then return nil end
+        return opts.home .. "/.config/SLSsteam"
+    end
+    -- Required lazily: tests load this file with dofile and no package.path.
+    return require("sls_profile").root()
+end
+
 local function journal_path(opts)
     if opts.journal_path then return opts.journal_path end
-    local home = opts.home or os.getenv("HOME") or ""
-    if home == "" then return nil end
-    return home .. "/.config/SLSsteam/.luatools-publish.journal"
+    local root = sls_root(opts)
+    if not root then return nil end
+    return root .. "/.luatools-publish.journal"
 end
 
 local function encode_journal(publications, snapshots, staged)
@@ -907,10 +919,10 @@ local function publish_preview(appid, preview, lua_text, supplied_opts)
     local manifests = preview.manifests or {}
     local preferred = preview.preferred or {}
 
-    local home = opts.home or os.getenv("HOME") or ""
+    local root = sls_root(opts)
     local steam_root = opts.steam_root or ""
-    if home == "" or steam_root == "" then return nil, "install paths unavailable" end
-    local store_dir = home .. "/.config/SLSsteam/manifests"
+    if not root or steam_root == "" then return nil, "install paths unavailable" end
+    local store_dir = root .. "/manifests"
     local target = steam_root .. "/config/stplug-in/" .. tostring(appid) .. ".lua"
     opts.mkdir(store_dir); opts.mkdir(parent_path(target))
 
@@ -924,8 +936,8 @@ local function publish_preview(appid, preview, lua_text, supplied_opts)
     end
     publications[#publications + 1] = { path = target, content = lua_text }
     if opts.sync_pins then
-        local config_path = opts.config_path or (home .. "/.config/SLSsteam/config.yaml")
-        local imports_path = opts.imports_path or (home .. "/.config/SLSsteam/lumen_lua_imports.txt")
+        local config_path = opts.config_path or (root .. "/config.yaml")
+        local imports_path = opts.imports_path or (root .. "/lumen_lua_imports.txt")
         local config_text, config_error = sync_manifest_pins(
             opts.read_file(config_path), appid, lua_text)
         if not config_text then return nil, config_error end

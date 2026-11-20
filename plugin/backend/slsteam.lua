@@ -9,26 +9,16 @@
 --   * Edits preserve comments, ordering and unrelated keys.
 --   * Atomic writes ensure watchers only observe complete files.
 
+local sls_profile = require("sls_profile")
+
 local slsteam = {}
 
-local function config_root()
-  local xdg = os.getenv("XDG_CONFIG_HOME")
-  if xdg and xdg ~= "" then return xdg end
-  local home = os.getenv("HOME") or ""
-  if home == "" then return nil end
-  return home .. "/.config"
-end
-
 local function config_path()
-  local root = config_root()
-  if not root then return nil end
-  return root .. "/SLSsteam/config.yaml"
+  return sls_profile.path("config.yaml")
 end
 
 local function cache_dir()
-  local root = config_root()
-  if not root then return nil end
-  return root .. "/SLSsteam/cache"
+  return sls_profile.path("cache")
 end
 
 local function shell_single_quote(value)
@@ -320,20 +310,19 @@ end
 -- Purge archived manifests for every depot referenced by a .lua, BEFORE the
 -- .lua is deleted (it's what tells us which depots belong to the game).
 -- Reads `addappid(<id> ...)` ids and deletes
--- ~/.config/SLSsteam/manifests/<id>_*.manifest for each (no-op when absent).
+-- <SLSsteam config>/manifests/<id>_*.manifest for each (no-op when absent).
 -- The persistent store (ManifestStore in slsteam-moon) keeps every manifest
 -- version a game ever staged; when the user removes the game via LuaTools its
 -- archived manifests would otherwise linger forever, so drop them here.
 -- Returns true,count | false,error.
 function slsteam.purge_store_for_lua(lua_path)
-  local home = os.getenv("HOME") or ""
-  if home == "" then return false, "HOME not set" end
+  local store = sls_profile.path("manifests")
+  if not store then return false, "HOME not set" end
   local f = io.open(lua_path, "rb")
   if not f then return true, 0 end
   local data = f:read("*a") or ""
   f:close()
 
-  local store = home .. "/.config/SLSsteam/manifests"
   local seen, count = {}, 0
   for id in data:gmatch("addappid%s*%(%s*(%d+)") do
     if not seen[id] then

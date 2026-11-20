@@ -12,6 +12,7 @@ local cjson = require("json")
 local smart_merge = require("smart_merge")
 local lua_tools_manifest = require("lua_tools_manifest")
 local source_limits = require("source_limits")
+local sls_profile = require("sls_profile")
 
 local downloads = {}
 local DOWNLOAD_STATE = {}
@@ -142,14 +143,23 @@ local function _positive_appid(value)
     return number
 end
 
+local SLS_PROFILE_OPTS = {
+    getenv = function(key) return m_utils.getenv(key) or os.getenv(key) end,
+}
+
+local function _appinfo_path(sls_root, appid)
+    if not sls_root then return nil end
+    return fs.join(sls_root, "cache", "picsbuffer_" .. tostring(appid) .. ".bin")
+end
+
 local function _merge_options(appid, sync_pins)
     local base_path = steam_utils.detect_steam_install_path()
-    local home = m_utils.getenv("HOME") or os.getenv("HOME") or ""
-    local appinfo_path = fs.join(home, ".config", "SLSsteam", "cache",
-        "picsbuffer_" .. tostring(appid) .. ".bin")
-    local appinfo_text = fs.exists(appinfo_path) and (m_utils.read_file(appinfo_path) or "") or ""
+    local sls_root = sls_profile.root(SLS_PROFILE_OPTS)
+    local appinfo_path = _appinfo_path(sls_root, appid)
+    local appinfo_text = appinfo_path and fs.exists(appinfo_path)
+        and (m_utils.read_file(appinfo_path) or "") or ""
     return {
-        home = home,
+        sls_root = sls_root,
         steam_root = base_path,
         appinfo_text = appinfo_text,
         read_file = m_utils.read_file,
@@ -168,8 +178,6 @@ local function _merge_options(appid, sync_pins)
             return result == true or result == 0
         end,
         sync_pins = sync_pins == true,
-        config_path = fs.join(home, ".config", "SLSsteam", "config.yaml"),
-        imports_path = fs.join(home, ".config", "SLSsteam", "lumen_lua_imports.txt"),
     }
 end
 
@@ -529,11 +537,9 @@ local function _has_fresh_job(appid)
 end
 
 local function _write_coverage(appid, coverage_file)
-    local home = m_utils.getenv("HOME") or os.getenv("HOME") or ""
-    local appinfo_path = fs.join(home, ".config", "SLSsteam", "cache",
-        "picsbuffer_" .. tostring(appid) .. ".bin")
+    local appinfo_path = _appinfo_path(sls_profile.root(SLS_PROFILE_OPTS), appid)
     local depot_info = {}
-    if fs.exists(appinfo_path) then
+    if appinfo_path and fs.exists(appinfo_path) then
         depot_info = smart_merge.parse_appinfo_depots(m_utils.read_file(appinfo_path) or "")
     end
     local coverage_lines, depots = {}, {}

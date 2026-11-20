@@ -522,11 +522,14 @@ end
 
 local JOURNAL_HEADER = "LUATOOLS-PUBLISH-1"
 
--- opts.sls_root is the resolved SLSsteam directory; opts.home pins the plain
--- $HOME/.config layout so callers stay independent of the live environment.
+-- opts.sls_root is the resolved SLSsteam directory; opts.xdg_config_home or
+-- opts.home pin an explicit layout so callers stay independent of the live env.
 local function sls_root(opts)
-    if opts.sls_root then return opts.sls_root end
-    if opts.home then
+    if opts and opts.sls_root then return opts.sls_root end
+    if opts and type(opts.xdg_config_home) == "string" and opts.xdg_config_home:sub(1, 1) == "/" then
+        return opts.xdg_config_home .. "/SLSsteam"
+    end
+    if opts and opts.home ~= nil then
         if opts.home == "" then return nil end
         return opts.home .. "/.config/SLSsteam"
     end
